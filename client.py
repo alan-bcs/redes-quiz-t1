@@ -15,9 +15,9 @@ def show_menu():
         print("="*50)
         print("Opções:")
         print("  1. Modo de quizzes solo")
-        print("  2. Modo de quizzes online")
-        print("  3. Ver Rankings gerais modo online")
-        print("  4. Ver Rankings gerais modo offline")
+        print("  2. Modo de quizzes multiplayer")
+        print("  3. Ver Rankings modo solo")
+        print("  4. Ver Rankings modo multiplayer")
         print("  5. Sair")
 
         choice = input("Escolha uma opção: ")
@@ -35,8 +35,8 @@ def quiz_menu_solo():
         print('Selecione o quiz do capítulo deseja praticar!')
         print("="*50)
         print('Opções:')
-        print('  1. Capítulo 1: Conceitos inicias de estruturas de redes') # descrever melhor depois
-        print('  2. Capítulo 2: ')
+        print('  1. Capítulo 1: Introdução a Redes de Computadores') # descrever melhor depois
+        print('  2. Capítulo 2: Camada de Aplicação')
         print('  3. Voltar')
         choice = input('Escolha uma opção: ')
 
@@ -51,6 +51,24 @@ def quiz_menu_solo():
 def quiz_menu_online():
     while True:
         limpar_terminal()
+
+# RANKING MENU SOLO
+def ranking_menu_solo():
+    while True:
+        limpar_terminal()
+        print("\n" + "="*50)
+        print('Selecione o ranking que deseja visualizar!')
+        print("="*50)
+        print('Opções:')
+        print('  1. Ranking - Capítulo 1')
+        print('  2. Ranking - Capítulo 2')
+        print('  3. Voltar')
+        choice = input('Escolha uma opção: ')
+        if choice in ['1', '2', '3']:
+            return choice
+        else:
+            print('Opção inválida. Tente novamente.')
+            sleep(1.5)
 
 
 # FUNCAO PARA TRATAR A MENSAGEM RECEBIDA DO SERVIDOR
@@ -75,10 +93,10 @@ def parse_and_display(message):
 
     elif command == "RESULTADO_CORRETO":
         print("Resposta Correta!")
-        sleep(1)
+        sleep(1.5)
     elif command == "RESULTADO_INCORRETO":
         print("Resposta Incorreta.")
-        sleep(1)
+        sleep(1.5)
     elif command == "FIM_DE_JOGO":
         print("\n" + "="*50)
         print("--- Fim do Questionário! ---")
@@ -110,7 +128,7 @@ def main():
         limpar_terminal()
         user_choice = show_menu() # PEGAR OPCAO DO USUARIO
 
-        if user_choice == '4':
+        if user_choice == '5':
             print('Até logo!')
             break
         
@@ -118,14 +136,14 @@ def main():
             user_choice = quiz_menu_solo()
 
             if(user_choice == '3'):
-                main() #voltar para o menu inicial
-                break
+                continue #voltar menu inicial
 
             if(user_choice == '1'):
                 quiz_id = 'REDES_C1'
             elif(user_choice == '2'):
                 quiz_id = 'REDES_C2'
             
+            limpar_terminal()
             player_name = input("Digite seu nome: ").strip()
             if not player_name: player_name = "Convidado"
 
@@ -134,33 +152,41 @@ def main():
                     s.connect((HOST, PORT))
                     s.sendall(f"INICIAR_QUIZ:{quiz_id}:{player_name}".encode())
 
-                    # Loop de comunicação com o servidor
-                    while True:
-                        server_msg = s.recv(2048).decode()
-                        if not server_msg: break
-                        
-                        parse_and_display(server_msg)
-
-                        if server_msg.startswith("PERGUNTA"):
-                            num_pergunta = server_msg.split(':')[1]
-                            while True:
-                                user_answer = input("Sua resposta (A, B, C ou D): ").strip().upper()
-                                if user_answer in ['A', 'B', 'C', 'D']:
-                                    s.sendall(f"RESPONDER_PERGUNTA:{num_pergunta}:{user_answer}".encode())
-                                    break
-                                else:
-                                    print("Resposta inválida.")
-                        
-                        elif server_msg == "FIM_DE_JOGO":
-                            s.sendall(b"PEDIR_PONTUACAO")
-                            server_msg_pontuacao = s.recv(1024).decode()
-                            parse_and_display(server_msg_pontuacao)
-                            
-                            s.sendall(b"PEDIR_RANKING")
-                            server_msg_ranking = s.recv(1024).decode()
-                            parse_and_display(server_msg_ranking)
-                            input("\nPressione Enter para voltar ao menu...")
+                    # --- LÓGICA DE RECEBIMENTO COM BUFFER ---
+                    buffer = ""
+                    quiz_over = False
+                    while not quiz_over:
+                        data = s.recv(2048).decode()
+                        if not data:
                             break
+                        buffer += data
+
+                        while '\n' in buffer:
+                            message, buffer = buffer.split('\n', 1)
+                            if not message: continue
+
+                            parse_and_display(message)
+
+                            if message.startswith("PERGUNTA"):
+                                num_pergunta = message.split(':')[1]
+                                while True:
+                                    user_answer = input("Sua resposta (A, B, C ou D): ").strip().upper()
+                                    if user_answer in ['A', 'B', 'C', 'D']:
+                                        s.sendall(f"RESPONDER_PERGUNTA:{num_pergunta}:{user_answer}".encode())
+                                        break
+                                    else:
+                                        print("Resposta inválida.")
+                            
+                            elif message == "FIM_DE_JOGO":
+                                s.sendall(b"PEDIR_PONTUACAO")
+                            
+                            elif message.startswith("PONTUACAO_FINAL"):
+                                s.sendall(b"PEDIR_RANKING")
+
+                            elif message.startswith("RANKING"):
+                                input("\nPressione Enter para voltar ao menu...")
+                                quiz_over = True
+                                break
                 
                 except ConnectionRefusedError:
                     print("\n[ERRO] Não foi possível conectar ao servidor. Verifique se ele está online.")
@@ -170,11 +196,25 @@ def main():
                     sleep(2)
 
         elif user_choice == '3':
+
+            ranking_choice = ranking_menu_solo()
+
+            if ranking_choice == '3':
+                continue
+
+            if(ranking_choice == '1'):
+                quiz_id_req = 'REDES_C1'
+            elif(ranking_choice == '2'):
+                quiz_id_req = 'REDES_C2'
+
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 try:
                     s.connect((HOST, PORT))
-                    s.sendall(b"PEDIR_RANKING")
+                    s.sendall(f"PEDIR_RANKING:{quiz_id_req}".encode())
+                    # A resposta do ranking pode não ter \n, então recebemos direto
                     ranking_msg = s.recv(1024).decode()
+                    if '\n' in ranking_msg: # Limpa o \n se o servidor enviar
+                        ranking_msg = ranking_msg.strip()
                     parse_and_display(ranking_msg)
                     input("\nPressione Enter para voltar ao menu...")
                 except ConnectionRefusedError:
