@@ -1,15 +1,20 @@
 import socket
 import threading
-from questoesC1 import questions
+from questions import questionsC1
+from questions import questionsC2
 
 
 QUIZZES = {
-    "REDES_C1": questions
+    "REDES_C1": questionsC1,
+    "REDES_C2": questionsC2
 }
-ranking = []
-ranking_lock = threading.Lock() # Lock para proteger o acesso concorrente ao ranking
 
-def handle_client(conn, addr): # funcao para gerenciar a conexão de um único cliente
+ranking = []
+ranking_lock = threading.Lock() #Lock para proteger o acesso concorrente ao ranking
+
+
+# FUNCAO PARA GERENCIAR A CONEXAO DE UM UNICO CLIENTE
+def handle_client(conn, addr):
     print(f"[NOVA CONEXÃO] {addr} conectado.")
     
     player_name = "Convidado"

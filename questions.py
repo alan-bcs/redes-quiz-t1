@@ -1,4 +1,4 @@
-questions = [
+questionsC1 = [
     {
         "question": "Qual é a principal diferença entre a comutação de pacotes (packet switching) e a comutação de circuitos (circuit switching)?",
         "options": {
@@ -96,6 +96,109 @@ questions = [
             "B": "Rede de Acesso por Cabo (Cable-based access)",
             "C": "Fibra Óptica Ponto a Ponto",
             "D": "Conexão Discada (Dial-up)"
+        },
+        "answer": "B"
+    }
+]
+
+questionsC2 = [
+    {
+        "question": "Qual é a principal função do protocolo DNS (Domain Name System)?",
+        "options": {
+            "A": "Transferir arquivos entre um cliente e um servidor.",
+            "B": "Traduzir nomes de domínio legíveis por humanos em endereços IP.",
+            "C": "Criptografar a comunicação entre o navegador e o servidor web.",
+            "D": "Gerenciar o envio e recebimento de e-mails."
+        },
+        "answer": "B"
+    },
+    {
+        "question": "O protocolo HTTP é considerado 'stateless' (sem estado). O que isso significa?",
+        "options": {
+            "A": "O servidor armazena informações detalhadas sobre cada cliente que se conecta.",
+            "B": "Cada requisição HTTP é tratada de forma independente, sem que o servidor guarde informações de requisições anteriores.",
+            "C": "A conexão TCP é mantida aberta indefinidamente.",
+            "D": "O protocolo não precisa de uma camada de transporte confiável."
+        },
+        "answer": "B"
+    },
+    {
+        "question": "Qual tecnologia é usada por websites para manter o estado entre transações, como em carrinhos de compra?",
+        "options": {
+            "A": "DNS",
+            "B": "UDP",
+            "C": "Sockets",
+            "D": "Cookies"
+        },
+        "answer": "D"
+    },
+    {
+        "question": "No contexto de e-mail, qual protocolo é usado para transferir mensagens entre servidores de e-mail?",
+        "options": {
+            "A": "HTTP (Hypertext Transfer Protocol)",
+            "B": "IMAP (Internet Message Access Protocol)",
+            "C": "SMTP (Simple Mail Transfer Protocol)",
+            "D": "DNS (Domain Name System)"
+        },
+        "answer": "C"
+    },
+    {
+        "question": "Qual dos seguintes serviços de transporte da Internet oferece entrega confiável de dados e controle de fluxo?",
+        "options": {
+            "A": "UDP (User Datagram Protocol)",
+            "B": "TCP (Transmission Control Protocol)",
+            "C": "IP (Internet Protocol)",
+            "D": "HTTP (Hypertext Transfer Protocol)"
+        },
+        "answer": "B"
+    },
+    {
+        "question": "Um código de status HTTP '404 Not Found' significa que:",
+        "options": {
+            "A": "A requisição foi bem-sucedida e o objeto está sendo enviado.",
+            "B": "O objeto solicitado foi movido permanentemente para um novo local.",
+            "C": "O servidor não conseguiu encontrar o documento ou recurso solicitado.",
+            "D": "A requisição enviada pelo cliente não foi entendida pelo servidor."
+        },
+        "answer": "C"
+    },
+    {
+        "question": "No paradigma cliente-servidor, qual é a característica de um servidor?",
+        "options": {
+            "A": "Possui um endereço IP dinâmico e está conectado de forma intermitente.",
+            "B": "É um host que está sempre ativo ('always-on') e possui um endereço IP permanente.",
+            "C": "Inicia a comunicação com o cliente.",
+            "D": "Não se comunica diretamente com outros servidores."
+        },
+        "answer": "B"
+    },
+    {
+        "question": "O que é um socket no contexto de programação de redes?",
+        "options": {
+            "A": "Um endereço IP e um número de porta.",
+            "B": "Uma interface de software que serve como uma 'porta' entre o processo da aplicação e o protocolo de transporte.",
+            "C": "Um protocolo de camada de aplicação para troca de mensagens.",
+            "D": "Um dispositivo físico de rede para conectar múltiplos computadores."
+        },
+        "answer": "B"
+    },
+    {
+        "question": "Qual é a principal vantagem de se usar Web Caching (ou Proxy Servers)?",
+        "options": {
+            "A": "Aumentar a segurança da conexão, criptografando todos os dados.",
+            "B": "Reduzir o tempo de resposta para o cliente e o tráfego na rede, armazenando cópias de objetos localmente.",
+            "C": "Garantir que os usuários sempre recebam a versão mais recente de uma página web, sem exceções.",
+            "D": "Permitir que múltiplos usuários editem a mesma página web simultaneamente."
+        },
+        "answer": "B"
+    },
+    {
+        "question": "A tecnologia DASH (Dynamic, Adaptive Streaming over HTTP) é usada em streaming de vídeo para:",
+        "options": {
+            "A": "Fornecer uma taxa de bits constante (CBR) para garantir a qualidade máxima do vídeo.",
+            "B": "Permitir que o cliente escolha a qualidade do vídeo dinamicamente com base na largura de banda disponível.",
+            "C": "Transmitir o vídeo inteiro de uma só vez para evitar buffering.",
+            "D": "Criptografar o conteúdo de vídeo para evitar pirataria."
         },
         "answer": "B"
     }

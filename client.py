@@ -9,24 +9,53 @@ def limpar_terminal():
 # FUNCAO PARA MOSTRAR O MENU INICIAL
 def show_menu():
     while True:
+        limpar_terminal()
         print("\n" + "="*50)
         print("Bem-vindo ao Quiz de Redes de Computadores!")
         print("="*50)
         print("Opções:")
-        print("  1. Iniciar Quiz: Introdução a Redes (Capítulo 1)")
-        print("  2. Ver Ranking")
-        print("  3. Sair")
+        print("  1. Modo de quizzes solo")
+        print("  2. Modo de quizzes online")
+        print("  3. Ver Rankings gerais modo online")
+        print("  4. Ver Rankings gerais modo offline")
+        print("  5. Sair")
 
         choice = input("Escolha uma opção: ")
-        if choice in ['1', '2', '3']:
+        if choice in ['1', '2', '3', '4', '5']:
             return choice
         else:
             print("Opção inválida. Tente novamente.")
             sleep(1.5)
-            limpar_terminal()
 
-def parse_and_display(message): #funcao para tratar a mensagem recebida
-    parts = message.split(':', 1) # Separar apenas o comando do resto
+# MENU DE QUIZZES SOLO
+def quiz_menu_solo():
+    while True:
+        limpar_terminal()
+        print("\n" + "="*50)
+        print('Selecione o quiz do capítulo deseja praticar!')
+        print("="*50)
+        print('Opções:')
+        print('  1. Capítulo 1: Conceitos inicias de estruturas de redes') # descrever melhor depois
+        print('  2. Capítulo 2: ')
+        print('  3. Voltar')
+        choice = input('Escolha uma opção: ')
+
+        if choice in ['1', '2', '3']:
+            return choice
+        else:
+            print('Opção inválida. Tente novamente.')
+            sleep(1.5)
+
+
+# MENU QUIZ ONLINE
+def quiz_menu_online():
+    while True:
+        limpar_terminal()
+
+
+# FUNCAO PARA TRATAR A MENSAGEM RECEBIDA DO SERVIDOR
+def parse_and_display(message):
+    parts = message.split(':', 1)
     command = parts[0]
 
     if command == "BEM_VINDO":
@@ -79,15 +108,24 @@ def main():
 
     while True:
         limpar_terminal()
-        user_choice = show_menu()
+        user_choice = show_menu() # PEGAR OPCAO DO USUARIO
 
-        if user_choice == '3':
-            print("Até logo!")
+        if user_choice == '4':
+            print('Até logo!')
             break
         
         elif user_choice == '1':
-            limpar_terminal()
-            quiz_id = "REDES_C1"
+            user_choice = quiz_menu_solo()
+
+            if(user_choice == '3'):
+                main() #voltar para o menu inicial
+                break
+
+            if(user_choice == '1'):
+                quiz_id = 'REDES_C1'
+            elif(user_choice == '2'):
+                quiz_id = 'REDES_C2'
+            
             player_name = input("Digite seu nome: ").strip()
             if not player_name: player_name = "Convidado"
 
@@ -131,7 +169,7 @@ def main():
                     print(f"\n[ERRO] Ocorreu um problema: {e}")
                     sleep(2)
 
-        elif user_choice == '2':
+        elif user_choice == '3':
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 try:
                     s.connect((HOST, PORT))
