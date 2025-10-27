@@ -21,19 +21,17 @@ def realizar_login(HOST, PORT):
             sleep(2)
             continue
         
-        # Tenta conectar e fazer login
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect((HOST, PORT))
             s.sendall(f"LOGIN:{player_name}".encode())
             
-            # Aguarda resposta do servidor
             response = s.recv(1024).decode().strip()
             
             if response == "LOGIN_ACEITO":
                 print(f"\n✓ Login realizado com sucesso! Bem-vindo(a), {player_name}!")
                 sleep(1.5)
-                return s, player_name  # Retorna o socket conectado e o nome
+                return s, player_name
             
             elif response.startswith("LOGIN_NEGADO"):
                 parts = response.split(':')
@@ -58,7 +56,7 @@ def realizar_login(HOST, PORT):
             print(f"\n[ERRO] Ocorreu um problema: {e}")
             sleep(2)
 
-# FUNCAO PARA MOSTRAR O MENU INICIAL
+# MENU PRINCIPAL
 def show_menu(player_name):
     while True:
         limpar_terminal()
@@ -97,6 +95,51 @@ def quiz_menu_solo():
             print('Opção inválida. Tente novamente.')
             sleep(1.5)
 
+# MENU MULTIPLAYER
+def multiplayer_menu():
+    while True:
+        limpar_terminal()
+        print("\n" + "="*50)
+        print('MODO MULTIPLAYER')
+        print("="*50)
+        print('Opções:')
+        print('  1. Criar nova sala')
+        print('  2. Entrar em sala existente')
+        print('  3. Voltar')
+        choice = input('Escolha uma opção: ')
+
+        if choice in ['1', '2', '3']:
+            return choice
+        else:
+            print('Opção inválida. Tente novamente.')
+            sleep(1.5)
+
+# MENU DA SALA (quando já está dentro)
+def sala_menu(room_id, is_host):
+    while True:
+        limpar_terminal()
+        print("\n" + "="*50)
+        print(f'SALA: {room_id}')
+        if is_host:
+            print('(Você é o HOST da sala)')
+        print("="*50)
+        print('Opções:')
+        print('  1. Ver jogadores na sala')
+        if is_host:
+            print('  2. Iniciar quiz')
+        print('  3. Sair da sala')
+        choice = input('Escolha uma opção: ')
+
+        if is_host:
+            if choice in ['1', '2', '3']:
+                return choice
+        else:
+            if choice in ['1', '3']:
+                return choice
+        
+        print('Opção inválida. Tente novamente.')
+        sleep(1.5)
+
 # RANKING MENU SOLO
 def ranking_menu_solo():
     while True:
@@ -115,7 +158,7 @@ def ranking_menu_solo():
             print('Opção inválida. Tente novamente.')
             sleep(1.5)
 
-# FUNCAO PARA TRATAR A MENSAGEM RECEBIDA DO SERVIDOR
+# FUNÇÃO PARA TRATAR A MENSAGEM RECEBIDA DO SERVIDOR
 def parse_and_display(message):
     parts = message.split(':', 1)
     command = parts[0]
@@ -161,6 +204,84 @@ def parse_and_display(message):
         print(f"[ERRO DO SERVIDOR] {parts[1]}")
     else:
         print(f"[DEBUG] Mensagem desconhecida: {message}")
+
+# FUNÇÃO PARA LISTAR SALAS DISPONÍVEIS
+def listar_salas_disponiveis(session_socket):
+    limpar_terminal()
+    print("\n" + "="*50)
+    print("SALAS DISPONÍVEIS")
+    print("="*50)
+    
+    session_socket.sendall(b"LISTAR_SALAS")
+    
+    buffer = ""
+    while True:
+        data = session_socket.recv(2048).decode()
+        if not data:
+            print("\n[ERRO] Conexão perdida com o servidor.")
+            return None
+        
+        buffer += data
+        
+        if '\n' in buffer:
+            message, buffer = buffer.split('\n', 1)
+            if message.startswith("SALAS_DISPONIVEIS"):
+                parts = message.split(':', 1)
+                if len(parts) == 1 or parts[1] == '':
+                    print("\nNenhuma sala disponível no momento.")
+                    return []
+                else:
+                    salas_str = parts[1]
+                    salas_list = salas_str.split(';')
+                    salas = []
+                    
+                    print("\nSalas disponíveis:\n")
+                    for i, sala_info in enumerate(salas_list):
+                        room_id, host, players_count, max_players = sala_info.split(':')
+                        salas.append(room_id)
+                        print(f"  {i+1}. {room_id} (Host: {host}) - Jogadores: {players_count}/{max_players}")
+                    
+                    return salas
+            break
+    
+    return None
+
+# FUNÇÃO PARA VER JOGADORES NA SALA
+def ver_jogadores_sala(session_socket):
+    session_socket.sendall(b"VER_JOGADORES_SALA")
+    
+    buffer = ""
+    while True:
+        data = session_socket.recv(2048).decode()
+        if not data:
+            print("\n[ERRO] Conexão perdida com o servidor.")
+            break
+        
+        buffer += data
+        
+        if '\n' in buffer:
+            message, buffer = buffer.split('\n', 1)
+            if message.startswith("JOGADORES_SALA"):
+                limpar_terminal()
+                parts = message.split(':', 2)
+                host = parts[1]
+                players_str = parts[2]
+                players = players_str.split(';')
+                
+                print("\n" + "="*50)
+                print("JOGADORES NA SALA")
+                print("="*50)
+                print(f"\nHost: {host}\n")
+                print("Jogadores:")
+                for i, player in enumerate(players):
+                    marker = "HOST" if player == host else "PLAYER"
+                    print(f"  {marker} {player}")
+                print(f"\nTotal: {len(players)}/5")
+                print("="*50)
+                break
+            elif message.startswith("ERRO"):
+                parse_and_display(message)
+                break
 
 def main():
     HOST = '127.0.0.1'
@@ -225,12 +346,160 @@ def main():
                             session_socket.sendall(b"PEDIR_PONTUACAO")
                         
                         elif message.startswith("PONTUACAO_FINAL"):
-                            session_socket.sendall(b"PEDIR_RANKING")
-
-                        elif message.startswith("RANKING"):
                             input("\nPressione Enter para voltar ao menu...")
                             quiz_over = True
                             break
+
+            elif user_choice == '2':  # Multiplayer
+                mp_choice = multiplayer_menu()
+                
+                if mp_choice == '3':  # Voltar
+                    continue
+                
+                elif mp_choice == '1':  # Criar sala
+                    session_socket.sendall(b"CRIAR_SALA")
+                    
+                    buffer = ""
+                    while True:
+                        data = session_socket.recv(2048).decode()
+                        if not data:
+                            print("\n[ERRO] Conexão perdida com o servidor.")
+                            break
+                        
+                        buffer += data
+                        
+                        if '\n' in buffer:
+                            message, buffer = buffer.split('\n', 1)
+                            if message.startswith("SALA_CRIADA"):
+                                room_id = message.split(':')[1]
+                                print(f"\n✓ Sala '{room_id}' criada com sucesso!")
+                                print("Você é o host da sala.")
+                                sleep(2)
+                                
+                                # Loop da sala
+                                in_room = True
+                                while in_room:
+                                    sala_choice = sala_menu(room_id, is_host=True)
+                                    
+                                    if sala_choice == '1':  # Ver jogadores
+                                        ver_jogadores_sala(session_socket)
+                                        input("\nPressione Enter para continuar...")
+                                    
+                                    elif sala_choice == '2':  # Iniciar quiz (TODO)
+                                        print("\n[INFO] Funcionalidade de iniciar quiz será implementada em breve!")
+                                        sleep(2)
+                                    
+                                    elif sala_choice == '3':  # Sair da sala
+                                        print("\nSaindo da sala...")
+                                        session_socket.sendall(b"SAIR_SALA")
+                                        
+                                        buffer_temp = ""
+                                        while True:
+                                            data = session_socket.recv(2048).decode()
+                                            if not data:
+                                                break
+                                            buffer_temp += data
+                                            if '\n' in buffer_temp:
+                                                msg, buffer_temp = buffer_temp.split('\n', 1)
+                                                if msg == "SAIU_SALA":
+                                                    print("✓ Você saiu da sala.")
+                                                    sleep(1)
+                                                break
+                                        in_room = False
+                                
+                                break
+                            elif message.startswith("ERRO"):
+                                parse_and_display(message)
+                                sleep(2)
+                                break
+                
+                elif mp_choice == '2':  # Entrar em sala
+                    salas = listar_salas_disponiveis(session_socket)
+                    
+                    if salas is None:
+                        sleep(2)
+                        continue
+                    
+                    if len(salas) == 0:
+                        input("\nPressione Enter para voltar...")
+                        continue
+                    
+                    print("\n" + "-"*50)
+                    escolha = input("Digite o número da sala para entrar (ou 0 para voltar): ")
+                    
+                    if escolha == '0':
+                        continue
+                    
+                    try:
+                        idx = int(escolha) - 1
+                        if 0 <= idx < len(salas):
+                            room_id = salas[idx]
+                            session_socket.sendall(f"ENTRAR_SALA:{room_id}".encode())
+                            
+                            buffer = ""
+                            while True:
+                                data = session_socket.recv(2048).decode()
+                                if not data:
+                                    print("\n[ERRO] Conexão perdida com o servidor.")
+                                    break
+                                
+                                buffer += data
+                                
+                                if '\n' in buffer:
+                                    message, buffer = buffer.split('\n', 1)
+                                    if message.startswith("ENTROU_SALA"):
+                                        room_id = message.split(':')[1]
+                                        print(f"\n✓ Você entrou na sala '{room_id}'!")
+                                        sleep(2)
+                                        
+                                        # Loop da sala (não é host)
+                                        in_room = True
+                                        while in_room:
+                                            sala_choice = sala_menu(room_id, is_host=False)
+                                            
+                                            if sala_choice == '1':  # Ver jogadores
+                                                ver_jogadores_sala(session_socket)
+                                                input("\nPressione Enter para continuar...")
+                                            
+                                            elif sala_choice == '3':  # Sair da sala
+                                                print("\nSaindo da sala...")
+                                                session_socket.sendall(b"SAIR_SALA")
+                                                
+                                                buffer_temp = ""
+                                                while True:
+                                                    data = session_socket.recv(2048).decode()
+                                                    if not data:
+                                                        break
+                                                    buffer_temp += data
+                                                    if '\n' in buffer_temp:
+                                                        msg, buffer_temp = buffer_temp.split('\n', 1)
+                                                        if msg == "SAIU_SALA":
+                                                            print("✓ Você saiu da sala.")
+                                                            sleep(1)
+                                                        break
+                                                in_room = False
+                                        
+                                        break
+                                    elif message.startswith("ERRO"):
+                                        parts = message.split(':')
+                                        if len(parts) > 1:
+                                            erro = parts[1]
+                                            if erro == "SALA_CHEIA":
+                                                print("\n✗ Esta sala já está cheia (máximo 5 jogadores).")
+                                            elif erro == "SALA_EM_JOGO":
+                                                print("\n✗ Esta sala já começou o quiz.")
+                                            elif erro == "SALA_NAO_ENCONTRADA":
+                                                print("\n✗ Sala não encontrada.")
+                                            else:
+                                                print(f"\n✗ Erro: {erro}")
+                                        sleep(2)
+                                        break
+                        else:
+                            print("\nNúmero inválido.")
+                            sleep(1.5)
+                    except ValueError:
+                        print("\nEntrada inválida.")
+                        sleep(1.5)
 
             elif user_choice == '3':  # Ver Rankings
                 ranking_choice = ranking_menu_solo()
