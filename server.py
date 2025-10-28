@@ -1,10 +1,13 @@
 import socket
 import threading
-import json
+#import json
 from questions import questionsC1, questionsC2
 
+HOST = '127.0.0.1'
+PORT = 1100
+
 # Persistência dos rankings
-RANKING_FILE = 'rankings.json'
+#RANKING_FILE = 'rankings.json'
 
 QUIZZES = {
     "REDES_C1": questionsC1,
@@ -16,60 +19,33 @@ logged_users = set()
 users_lock = threading.Lock()
 
 # CONTROLE DE SALAS MULTIPLAYER
-rooms = {}  # {room_id: {'host': player_name, 'players': [player_name, ...], 'quiz_id': None, 'status': 'waiting'}}
+rooms = {}  # {room_id: {'players': [player_name, ...], 'scores': {player_name: score}}}
 rooms_lock = threading.Lock()
-room_counter = 0  # Contador para gerar IDs sequenciais de salas
+room_counter = 0
 
-# FUNÇÃO PARA CARREGAR O ARQUIVO .JSON
-def load_rankings():
-    try:
-        with open(RANKING_FILE, 'r') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
 
-# FUNÇÃO QUE SALVA DICIONÁRIO DE RANKINGS NO .JSON
-def save_rankings(rankings_data):
-    with open(RANKING_FILE, 'w') as f:
-        json.dump(rankings_data, f, indent=4)
-
-rankings = load_rankings()
 ranking_lock = threading.Lock()
 
-# FUNÇÕES DE GERENCIAMENTO DE SALAS
-def create_room(host_name):
-    """Cria uma nova sala e retorna o room_id"""
+# FUNÇÕES PARA CRIAÇÃO DE SALAS
+def create_room(player_name):
     global room_counter
     with rooms_lock:
         room_counter += 1
         room_id = f"sala_{room_counter}"
         rooms[room_id] = {
-            'host': host_name,
-            'players': [host_name],
-            'quiz_id': None,
-            'status': 'waiting',  # waiting, playing, finished
-            'scores': {}  # {player_name: score}
+            'players': [player_name],
+            'scores': {player_name: 0}
         }
-        print(f"[SALA CRIADA] {room_id} por {host_name}")
+        print(f"[SALA CRIADA] {room_id} por {player_name}")
         return room_id
 
-def delete_room(room_id):
-    """Remove uma sala"""
-    with rooms_lock:
-        if room_id in rooms:
-            del rooms[room_id]
-            print(f"[SALA DELETADA] {room_id}")
-
+# FUNÇÃO PARA ENTRAR EM UMA SALA
 def join_room(room_id, player_name):
-    """Adiciona um jogador a uma sala. Retorna True se bem-sucedido."""
     with rooms_lock:
         if room_id not in rooms:
             return False, "SALA_NAO_ENCONTRADA"
         
         room = rooms[room_id]
-        
-        if room['status'] != 'waiting':
-            return False, "SALA_EM_JOGO"
         
         if len(room['players']) >= 5:
             return False, "SALA_CHEIA"
@@ -78,11 +54,12 @@ def join_room(room_id, player_name):
             return False, "JA_NA_SALA"
         
         room['players'].append(player_name)
+        room['scores'][player_name] = 0
         print(f"[JOGADOR ENTROU] {player_name} entrou em {room_id}")
         return True, "SUCESSO"
 
+# FUNÇÃO PARA SAIR DE UMA SALA (DELETAR SE VAZIA)
 def leave_room(room_id, player_name):
-    """Remove um jogador de uma sala. Se for o host, deleta a sala."""
     with rooms_lock:
         if room_id not in rooms:
             return
@@ -91,38 +68,54 @@ def leave_room(room_id, player_name):
         
         if player_name in room['players']:
             room['players'].remove(player_name)
+            if player_name in room['scores']:
+                del room['scores'][player_name]
             print(f"[JOGADOR SAIU] {player_name} saiu de {room_id}")
         
-        # Se o host saiu ou sala ficou vazia, deleta a sala
-        if player_name == room['host'] or len(room['players']) == 0:
+        # Deleta a sala se ficou vazia
+        if len(room['players']) == 0:
             del rooms[room_id]
-            print(f"[SALA DELETADA] {room_id} (host saiu ou sala vazia)")
+            print(f"[SALA DELETADA] {room_id} (sala vazia)")
 
+# LISTAR SALAS DISPONÍVEIS
 def get_available_rooms():
-    """Retorna lista de salas disponíveis"""
     with rooms_lock:
         available = []
         for room_id, room_data in rooms.items():
-            if room_data['status'] == 'waiting' and len(room_data['players']) < 5:
+            if len(room_data['players']) < 5:
                 available.append({
                     'room_id': room_id,
-                    'host': room_data['host'],
                     'players_count': len(room_data['players']),
                     'max_players': 5
                 })
-        return available
+        return available # retorna apenas salas com vagas
 
+# OBTER JOGADORES NA SALA
 def get_room_players(room_id):
-    """Retorna lista de jogadores na sala"""
     with rooms_lock:
         if room_id in rooms:
             return rooms[room_id]['players'].copy()
         return []
 
-def notify_room_players(room_id, message, exclude_player=None):
-    """Envia uma mensagem para todos os jogadores da sala (exceto exclude_player)"""
-    # Esta função será implementada mantendo referências aos sockets dos clientes
-    pass
+# OBTER RANKING DA SALA
+def get_room_ranking(room_id):
+    with rooms_lock:
+        if room_id in rooms:
+            scores = rooms[room_id]['scores']
+            ranking = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+            return ranking
+        return []
+
+# ATUALIZAR PONTUAÇÃO NA SALA
+def update_room_score(room_id, player_name, correct):
+    with rooms_lock:
+        if room_id in rooms and player_name in rooms[room_id]['scores']:
+            if correct:
+                rooms[room_id]['scores'][player_name] += 1
+            else:
+                # O score nunca fica negativo
+                rooms[room_id]['scores'][player_name] = max(0, rooms[room_id]['scores'][player_name] - 1)
+            print(f"[SCORE ATUALIZADO] {player_name} em {room_id}: {rooms[room_id]['scores'][player_name]} pontos")
 
 # FUNÇÃO PARA GERENCIAR A CONEXÃO DE UM ÚNICO CLIENTE
 def handle_client(conn, addr):
@@ -131,10 +124,10 @@ def handle_client(conn, addr):
     player_name = None
     score = 0
     selected_quiz = None
-    current_room = None  # ID da sala em que o jogador está
+    current_room = None
 
     try:
-        # 1. Espera a primeira mensagem do cliente (pode ser LOGIN ou PEDIR_RANKING)
+        # 1. Espera a primeira mensagem do cliente
         init_message = conn.recv(1024).decode().strip()
 
         # === PROTOCOLO DE LOGIN ===
@@ -154,34 +147,40 @@ def handle_client(conn, addr):
                         conn.sendall(b"LOGIN_ACEITO\n")
                         print(f"[LOGIN ACEITO] {addr} logado como '{player_name}'.")
                 
-                # Agora aguarda os próximos comandos do cliente já logado
+                # Aguarda comandos do cliente já logado
                 while True:
                     command = conn.recv(1024).decode().strip()
                     
                     if not command:
                         break
                     
-                    # PROTOCOLO PEDIR RANKING (SOLO)
-                    if command.startswith("PEDIR_RANKING"):
-                        parts = command.split(':')
-                        if len(parts) == 2:
-                            quiz_id_req = parts[1]
-                            with ranking_lock:
-                                specific_ranking = rankings.get(quiz_id_req, [])
-                                if not specific_ranking:
-                                    ranking_str = ""
-                                else:
-                                    ranking_str = ";".join([f"{name}:{pts}" for name, pts in specific_ranking])
-                            conn.sendall(f"RANKING:{ranking_str}\n".encode())
+                    print(f"[COMANDO] {player_name}: {command}")
+                    #print(f"[DEBUG] current_room = {current_room}")
+                    
+                    # PEDIR RANKING DA SALA (deve vir ANTES do ranking solo!)
+                    if command == "PEDIR_RANKING_SALA":
+                        #print(f"[DEBUG] PEDIR_RANKING_SALA - current_room = {current_room}")
+                        if not current_room:
+                            #print(f"[DEBUG] Enviando ERRO:NAO_EM_SALA")
+                            conn.sendall(b"ERRO:NAO_EM_SALA\n")
+                        else:
+                            ranking = get_room_ranking(current_room)
+                            if not ranking:
+                                ranking_str = ""
+                            else:
+                                ranking_str = ";".join([f"{name}:{pts}" for name, pts in ranking])
+                            response = f"RANKING_SALA:{ranking_str}\n"
+                            print(f"[ENVIANDO RANKING] Para sala {current_room}: {response.strip()}")
+                            conn.sendall(response.encode())
                     
                     # PROTOCOLO INICIAR QUIZ (SOLO)
-                    elif command.startswith("INICIAR_QUIZ"):
+                    elif command.startswith("INICIAR_QUIZ:"):
                         parts = command.split(':')
                         if len(parts) == 2:
                             quiz_id = parts[1]
                             if quiz_id in QUIZZES:
                                 selected_quiz = QUIZZES[quiz_id]
-                                score = 0 # Reseta o score no início do quiz
+                                score = 0
                                 conn.sendall(b"BEM_VINDO\n")
                                 
                                 # Loop principal do Quiz
@@ -191,7 +190,7 @@ def handle_client(conn, addr):
                                     conn.sendall(question_msg.encode() + b'\n')
 
                                     # Aguarda a resposta do cliente
-                                    answer_msg = conn.recv(1024).decode()
+                                    answer_msg = conn.recv(1024).decode().strip()
                                     answer_parts = answer_msg.split(':')
                                     user_answer = answer_parts[2]
 
@@ -204,37 +203,16 @@ def handle_client(conn, addr):
                                 # Fim do Quiz
                                 conn.sendall(b"FIM_DE_JOGO\n")
                                 
-                                # Atualização do ranking
-                                with ranking_lock:
-                                    specific_quiz_ranking = rankings.get(quiz_id, [])
-                                    
-                                    player_found = False
-                                    for i, (name, old_score) in enumerate(specific_quiz_ranking):
-                                        if name == player_name:
-                                            player_found = True
-                                            if score > old_score:
-                                                specific_quiz_ranking[i] = (player_name, score)
-                                            break
-                                    
-                                    if not player_found:
-                                        specific_quiz_ranking.append((player_name, score))
-
-                                    specific_quiz_ranking.sort(key=lambda item: item[1], reverse=True)
-                                    rankings[quiz_id] = specific_quiz_ranking
-                                    save_rankings(rankings)
-                                
-                                # O cliente vai pedir a pontuação. Aguardamos esse comando.
+                                # Aguarda pedido de pontuação
                                 final_command = conn.recv(1024).decode().strip()
                                 if final_command == "PEDIR_PONTUACAO":
                                     conn.sendall(f"PONTUACAO_FINAL:{score}\n".encode())
-                                # Após enviar a pontuação, o quiz termina e o servidor volta a escutar
-                                # por comandos do menu principal no loop 'while True' externo.
                                 
                             else:
                                 conn.sendall(b"ERRO:QUIZ_NAO_ENCONTRADO\n")
                     
-                    # === PROTOCOLOS MULTIPLAYER ===
                     
+                    # PROTOCOLOS DE SALAS MULTIPLAYER
                     # CRIAR SALA
                     elif command == "CRIAR_SALA":
                         if current_room:
@@ -242,6 +220,7 @@ def handle_client(conn, addr):
                         else:
                             room_id = create_room(player_name)
                             current_room = room_id
+                            #print(f"[DEBUG] Sala criada, current_room agora é: {current_room}")
                             conn.sendall(f"SALA_CRIADA:{room_id}\n".encode())
                     
                     # LISTAR SALAS
@@ -251,7 +230,7 @@ def handle_client(conn, addr):
                             conn.sendall(b"SALAS_DISPONIVEIS:\n")
                         else:
                             salas_str = ";".join([
-                                f"{r['room_id']}:{r['host']}:{r['players_count']}:{r['max_players']}"
+                                f"{r['room_id']}:{r['players_count']}:{r['max_players']}"
                                 for r in available
                             ])
                             conn.sendall(f"SALAS_DISPONIVEIS:{salas_str}\n".encode())
@@ -267,20 +246,85 @@ def handle_client(conn, addr):
                                 success, reason = join_room(room_id, player_name)
                                 if success:
                                     current_room = room_id
+                                    #print(f"[DEBUG] Entrou na sala, current_room agora é: {current_room}")
                                     conn.sendall(f"ENTROU_SALA:{room_id}\n".encode())
                                 else:
                                     conn.sendall(f"ERRO:{reason}\n".encode())
                     
                     # VER JOGADORES NA SALA
                     elif command == "VER_JOGADORES_SALA":
+                        #print(f"[DEBUG] VER_JOGADORES_SALA - current_room = {current_room}")
                         if not current_room:
                             conn.sendall(b"ERRO:NAO_EM_SALA\n")
                         else:
                             players = get_room_players(current_room)
-                            with rooms_lock:
-                                host = rooms[current_room]['host'] if current_room in rooms else ""
                             players_str = ";".join(players)
-                            conn.sendall(f"JOGADORES_SALA:{host}:{players_str}\n".encode())
+                            response = f"JOGADORES_SALA:{players_str}\n"
+                            print(f"[ENVIANDO] {response.strip()}")
+                            conn.sendall(response.encode())
+                    
+                    # INICIAR QUIZ NA SALA
+                    elif command.startswith("INICIAR_QUIZ_SALA"):
+                        if not current_room:
+                            conn.sendall(b"ERRO:NAO_EM_SALA\n")
+                        else:
+                            parts = command.split(':')
+                            if len(parts) == 2:
+                                quiz_id = parts[1]
+                                if quiz_id in QUIZZES:
+                                    selected_quiz = QUIZZES[quiz_id]
+                                    print(f"[QUIZ SALA] {player_name} iniciando quiz {quiz_id} na sala {current_room}")
+                                    conn.sendall(b"BEM_VINDO\n")
+                                    
+                                    # Loop do Quiz
+                                    for i, q in enumerate(selected_quiz):
+                                        options_str = ":".join(q["options"].values())
+                                        question_msg = f"PERGUNTA:{i+1}:{q['question']}:{options_str}"
+                                        conn.sendall(question_msg.encode() + b'\n')
+
+                                        # Aguarda resposta
+                                        answer_msg = conn.recv(1024).decode().strip()
+                                        
+                                        # LÓGICA DE PARSING SEGURA
+                                        answer_parts = answer_msg.split(':')
+                                        if len(answer_parts) == 3 and answer_parts[0] == "RESPONDER_PERGUNTA":
+                                            user_answer = answer_parts[2]
+                                            correct = (user_answer == q["answer"])
+                                            
+                                            update_room_score(current_room, player_name, correct)
+                                            
+                                            if correct:
+                                                conn.sendall(b"RESULTADO_CORRETO\n")
+                                            else:
+                                                conn.sendall(b"RESULTADO_INCORRETO\n")
+                                        else:
+                                            # Se a mensagem do cliente for inválida
+                                            print(f"[AVISO] Mensagem de resposta inválida de {player_name}: {answer_msg}")
+                                            conn.sendall(b"ERRO:RESPOSTA_INVALIDA\n")
+
+                                    # Fim do Quiz
+                                    conn.sendall(b"FIM_DE_JOGO\n")
+                                    print(f"[FIM QUIZ SALA] Quiz finalizado para {player_name}")
+                                    
+                                    # Obtém pontuação final da sala
+                                    with rooms_lock:
+                                        final_score = rooms.get(current_room, {}).get('scores', {}).get(player_name, 0)
+                                    
+                                    print(f"[PONTUACAO] {player_name} na sala {current_room}: {final_score} pontos")
+
+                                    # Aguarda pedido de pontuação
+                                    final_command = conn.recv(1024).decode().strip()
+                                    print(f"[COMANDO FINAL] Recebido: {final_command}")
+                                    
+                                    if final_command == "PEDIR_PONTUACAO":
+                                        response = f"PONTUACAO_FINAL_SALA:{final_score}\n"
+                                        print(f"[ENVIANDO] {response.strip()}")
+                                        conn.sendall(response.encode())
+                                    else:
+                                        print(f"[AVISO] Comando inesperado após FIM_DE_JOGO: {final_command}")
+                                    
+                                else:
+                                    conn.sendall(b"ERRO:QUIZ_NAO_ENCONTRADO\n")
                     
                     # SAIR DA SALA
                     elif command == "SAIR_SALA":
@@ -297,31 +341,19 @@ def handle_client(conn, addr):
             else:
                 conn.sendall(b"ERRO:FORMATO_INVALIDO\n")
                 return
-        
-        # PROTOCOLO PEDIR RANKING (sem login, para visualização rápida)
-        elif init_message.startswith("PEDIR_RANKING"):
-            parts = init_message.split(':')
-            if len(parts) == 2:
-                quiz_id_req = parts[1]
-                with ranking_lock:
-                    specific_ranking = rankings.get(quiz_id_req, [])
-                    if not specific_ranking:
-                        ranking_str = ""
-                    else:
-                        ranking_str = ";".join([f"{name}:{pts}" for name, pts in specific_ranking])
-                conn.sendall(f"RANKING:{ranking_str}\n".encode())
-            return
 
     except ConnectionResetError:
         print(f"[AVISO] Conexão com {addr} perdida inesperadamente.")
     except Exception as e:
         print(f"[ERRO] Erro ao processar cliente {addr}: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         # Remove o usuário da sala se estiver em alguma
         if current_room:
             leave_room(current_room, player_name)
         
-        # Remove o usuário da lista de logados ao desconectar
+        # Remove o usuário da lista de logados
         if player_name:
             with users_lock:
                 logged_users.discard(player_name)
@@ -331,8 +363,6 @@ def handle_client(conn, addr):
 
 def start_server():
     """Inicia o servidor e aguarda por conexões."""
-    HOST = '127.0.0.1'
-    PORT = 1100
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
