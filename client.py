@@ -353,7 +353,9 @@ def jogar_quiz_sala(session_socket, quiz_id):
     
 
     fim_de_jogo = False
-    while not fim_de_jogo:
+    user_quit = False
+
+    while not fim_de_jogo and not user_quit:
         while '\n' not in buffer:
             data = session_socket.recv(2048).decode()
             if not data:
@@ -369,13 +371,20 @@ def jogar_quiz_sala(session_socket, quiz_id):
             num_pergunta = message.split(':')[1]
             
             while True:
-                user_answer = input("Sua resposta (A, B, C ou D): ").strip().upper()
+                user_answer = input("Sua resposta (A, B, C ou D) [ou 'SAIR' para desistir]: ").strip().upper()
                 if user_answer in ['A', 'B', 'C', 'D']:
                     session_socket.sendall(f"RESPONDER_PERGUNTA:{num_pergunta}:{user_answer}\n".encode())
                     break
+                elif user_answer == 'SAIR':
+                    print("Desistindo do quiz...")
+                    session_socket.sendall(b"QUIT_QUIZ\n")
+                    user_quit = True
+                    break
                 else:
                     print("Resposta inválida.")
-            
+            if user_quit:
+                break
+
             # Esperar resultado
             while '\n' not in buffer:
                 data = session_socket.recv(2048).decode()
@@ -390,21 +399,38 @@ def jogar_quiz_sala(session_socket, quiz_id):
             parse_and_display(message)
             session_socket.sendall(b"PEDIR_PONTUACAO\n")
             fim_de_jogo = True
-    
-    # Receber pontuação final
-    while True:
+
+        # Lógica de saída
+        elif message == "QUIZ_ENCERRADO":
+            print("\nO quiz foi encerrado pelo servidor.")
+            user_quit = True
+            break
+
+    # Confirmar saída do quiz
+    if user_quit and not message == "QUIZ_ENCERRADO":
         while '\n' not in buffer:
             data = session_socket.recv(2048).decode()
-            if not data:
-                return
+            if not data: return
             buffer += data
-        
         message, buffer = buffer.split('\n', 1)
-        debug_log(f"Mensagem final: {message}")
-        
-        if message.startswith("PONTUACAO_FINAL_SALA"):
-            parse_and_display(message)
-            break
+        if message == "QUIZ_ENCERRADO":
+            print("[SERVIDOR] Confirmação de saída recebida.")
+    
+    # Receber pontuação final
+    if fim_de_jogo:
+        while True:
+            while '\n' not in buffer:
+                data = session_socket.recv(2048).decode()
+                if not data:
+                    return
+                buffer += data
+            
+            message, buffer = buffer.split('\n', 1)
+            debug_log(f"Mensagem final: {message}")
+            
+            if message.startswith("PONTUACAO_FINAL_SALA"):
+                parse_and_display(message)
+                break
     
     print("\n" + "="*50)
     input("Pressione Enter para voltar ao menu da sala...")
@@ -443,7 +469,9 @@ def main():
                 # Lógica de recebimento com buffer
                 buffer = ""
                 quiz_over = False
-                while not quiz_over:
+                user_quit = False
+
+                while not quiz_over and not user_quit:
                     data = session_socket.recv(2048).decode()
                     if not data:
                         print("\n[ERRO] Conexão perdida com o servidor.")
@@ -460,12 +488,19 @@ def main():
                         if message.startswith("PERGUNTA"):
                             num_pergunta = message.split(':')[1]
                             while True:
-                                user_answer = input("Sua resposta (A, B, C ou D): ").strip().upper()
+                                user_answer = input("Sua resposta (A, B, C ou D) [ou 'SAIR' para desistir]: ").strip().upper()
                                 if user_answer in ['A', 'B', 'C', 'D']:
                                     session_socket.sendall(f"RESPONDER_PERGUNTA:{num_pergunta}:{user_answer}\n".encode())
                                     break
+                                elif user_answer == 'SAIR':
+                                    print("Desistindo do quiz...")
+                                    session_socket.sendall(b"QUIT_QUIZ\n")
+                                    user_quit = True
+                                    break
                                 else:
                                     print("Resposta inválida.")
+                            if user_quit:
+                                break
                         
                         elif message == "FIM_DE_JOGO":
                             session_socket.sendall(b"PEDIR_PONTUACAO\n")
@@ -474,6 +509,13 @@ def main():
                             input("\nPressione Enter para voltar ao menu...")
                             quiz_over = True
                             break
+                        elif message == "QUIZ_ENCERRADO":
+                            print("\n[AVISO] Você desistiu do quiz.")
+                            input("\nPressione Enter para voltar ao menu...")
+                            user_quit = True
+                            break
+                    if user_quit:
+                        break
 
             elif user_choice == '2':  # Multiplayer
                 mp_choice = multiplayer_menu()

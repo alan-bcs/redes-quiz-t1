@@ -183,6 +183,7 @@ def handle_client(conn, addr):
                                 score = 0
                                 conn.sendall(b"BEM_VINDO\n")
                                 
+                                user_quit_solo = False
                                 # Loop principal do Quiz
                                 for i, q in enumerate(selected_quiz):
                                     options_str = ":".join(q["options"].values())
@@ -191,6 +192,14 @@ def handle_client(conn, addr):
 
                                     # Aguarda a resposta do cliente
                                     answer_msg = conn.recv(1024).decode().strip()
+
+                                    # Lógica de saída do quiz
+                                    if answer_msg == "QUIT_QUIZ":
+                                        user_quit_solo = True
+                                        print(f"[QUIZ SOLO] {player_name} desistiu do quiz.")
+                                        conn.sendall(b"QUIZ_ENCERRADO\n")
+                                        break
+
                                     answer_parts = answer_msg.split(':')
                                     user_answer = answer_parts[2]
 
@@ -200,13 +209,14 @@ def handle_client(conn, addr):
                                     else:
                                         conn.sendall(b"RESULTADO_INCORRETO\n")
 
-                                # Fim do Quiz
-                                conn.sendall(b"FIM_DE_JOGO\n")
+                                # Fim do Quiz (se não houve desistência)
+                                if not user_quit_solo:
+                                    conn.sendall(b"FIM_DE_JOGO\n")
                                 
-                                # Aguarda pedido de pontuação
-                                final_command = conn.recv(1024).decode().strip()
-                                if final_command == "PEDIR_PONTUACAO":
-                                    conn.sendall(f"PONTUACAO_FINAL:{score}\n".encode())
+                                    # Aguarda pedido de pontuação
+                                    final_command = conn.recv(1024).decode().strip()
+                                    if final_command == "PEDIR_PONTUACAO":
+                                        conn.sendall(f"PONTUACAO_FINAL:{score}\n".encode())
                                 
                             else:
                                 conn.sendall(b"ERRO:QUIZ_NAO_ENCONTRADO\n")
@@ -276,6 +286,7 @@ def handle_client(conn, addr):
                                     print(f"[QUIZ SALA] {player_name} iniciando quiz {quiz_id} na sala {current_room}")
                                     conn.sendall(b"BEM_VINDO\n")
                                     
+                                    user_quit_sala = False
                                     # Loop do Quiz
                                     for i, q in enumerate(selected_quiz):
                                         options_str = ":".join(q["options"].values())
@@ -285,6 +296,13 @@ def handle_client(conn, addr):
                                         # Aguarda resposta
                                         answer_msg = conn.recv(1024).decode().strip()
                                         
+                                        # Lógica de saída do quiz
+                                        if answer_msg == "QUIT_QUIZ":
+                                            user_quit_sala = True
+                                            print(f"[QUIZ SALA] {player_name} desistiu do quiz em {current_room}.")
+                                            conn.sendall(b"QUIZ_ENCERRADO\n")
+                                            break
+
                                         # LÓGICA DE PARSING SEGURA
                                         answer_parts = answer_msg.split(':')
                                         if len(answer_parts) == 3 and answer_parts[0] == "RESPONDER_PERGUNTA":
@@ -302,26 +320,27 @@ def handle_client(conn, addr):
                                             print(f"[AVISO] Mensagem de resposta inválida de {player_name}: {answer_msg}")
                                             conn.sendall(b"ERRO:RESPOSTA_INVALIDA\n")
 
-                                    # Fim do Quiz
-                                    conn.sendall(b"FIM_DE_JOGO\n")
-                                    print(f"[FIM QUIZ SALA] Quiz finalizado para {player_name}")
+                                    # Fim do Quiz (se não houve desistência)
+                                    if not user_quit_sala:
+                                        conn.sendall(b"FIM_DE_JOGO\n")
+                                        print(f"[FIM QUIZ SALA] Quiz finalizado para {player_name}")
                                     
-                                    # Obtém pontuação final da sala
-                                    with rooms_lock:
-                                        final_score = rooms.get(current_room, {}).get('scores', {}).get(player_name, 0)
+                                        # Obtém pontuação final da sala
+                                        with rooms_lock:
+                                            final_score = rooms.get(current_room, {}).get('scores', {}).get(player_name, 0)
                                     
-                                    print(f"[PONTUACAO] {player_name} na sala {current_room}: {final_score} pontos")
+                                        print(f"[PONTUACAO] {player_name} na sala {current_room}: {final_score} pontos")
 
-                                    # Aguarda pedido de pontuação
-                                    final_command = conn.recv(1024).decode().strip()
-                                    print(f"[COMANDO FINAL] Recebido: {final_command}")
-                                    
-                                    if final_command == "PEDIR_PONTUACAO":
-                                        response = f"PONTUACAO_FINAL_SALA:{final_score}\n"
-                                        print(f"[ENVIANDO] {response.strip()}")
-                                        conn.sendall(response.encode())
-                                    else:
-                                        print(f"[AVISO] Comando inesperado após FIM_DE_JOGO: {final_command}")
+                                        # Aguarda pedido de pontuação
+                                        final_command = conn.recv(1024).decode().strip()
+                                        print(f"[COMANDO FINAL] Recebido: {final_command}")
+                                        
+                                        if final_command == "PEDIR_PONTUACAO":
+                                            response = f"PONTUACAO_FINAL_SALA:{final_score}\n"
+                                            print(f"[ENVIANDO] {response.strip()}")
+                                            conn.sendall(response.encode())
+                                        else:
+                                            print(f"[AVISO] Comando inesperado após FIM_DE_JOGO: {final_command}")
                                     
                                 else:
                                     conn.sendall(b"ERRO:QUIZ_NAO_ENCONTRADO\n")
