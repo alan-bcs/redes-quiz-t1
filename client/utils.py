@@ -1,5 +1,5 @@
 import os
-from config import DEBUG
+DEBUG = False
 
 def debug_log(msg):
     if DEBUG:

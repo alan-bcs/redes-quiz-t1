@@ -2,7 +2,7 @@ import socket
 import threading
 from client_handler import handle_client
 
-# O cliente também deve usar '127.0.0.1' em seu config.py.
+
 HOST = '127.0.0.1' 
 PORT = 1100
 
